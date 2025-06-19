@@ -6,6 +6,7 @@ from src.utils import settings
 from datetime import datetime
 from src.agent import Agent
 from src.backtest.backtester import Backtester
+from src.gateway.order_executor import OrderExecutor
 
 
 load_dotenv()
@@ -55,6 +56,23 @@ if __name__ == "__main__":
             },
         }
 
+        # Check if order execution is enabled
+        if settings.execution.enabled:
+            print("⚠️  WARNING: Live trading is enabled!")
+            print(f"   Testnet: {settings.execution.testnet}")
+            print(f"   Max order size: ${settings.execution.max_order_size}")
+            print(f"   Min confidence: {settings.execution.min_confidence}%")
+            
+            # Verify API credentials
+            try:
+                executor = OrderExecutor(testnet=settings.execution.testnet)
+                account_info = executor.get_account_info()
+                print(f"✅ Connected to Binance account")
+                print(f"   Balance: {account_info.get('totalWalletBalance', 'N/A')}")
+            except Exception as e:
+                print(f"❌ Failed to connect to Binance: {e}")
+                exit(1)
+        
         result = Agent.run(
             primary_interval=settings.primary_interval,
             intervals=settings.signals.intervals,
@@ -66,7 +84,13 @@ if __name__ == "__main__":
             show_agent_graph=settings.show_agent_graph,
             model_name=settings.model.name,
             model_provider=settings.model.provider,
-            model_base_url=settings.model.base_url
+            model_base_url=settings.model.base_url,
+            enable_execution=settings.execution.enabled  # Pass execution flag
         )
-        # print(result)
+        
+        print("Trading Decisions:")
         print(result.get('decisions'))
+        
+        if settings.execution.enabled and 'execution_results' in result:
+            print("\nOrder Execution Results:")
+            print(result.get('execution_results'))

@@ -1,13 +1,14 @@
 from typing import List
 from langgraph.graph import END, StateGraph
 from graph import AgentState, StartNode, DataNode, EmptyNode, RiskManagementNode, PortfolioManagementNode
+from graph.order_execution_node import OrderExecutionNode
 from utils import import_strategy_class, Interval
 
 
 class Workflow:
     @staticmethod
-    def create_workflow(intervals: List[Interval], strategies: List[str]) -> StateGraph:
-        """Create the workflow with Strategy."""
+    def create_workflow(intervals: List[Interval], strategies: List[str], enable_execution: bool = False) -> StateGraph:
+        """Create the workflow with Strategy and optional order execution."""
         workflow = StateGraph(AgentState)
 
         start_node = StartNode()
@@ -34,15 +35,22 @@ class Workflow:
         portfolio_management_node = PortfolioManagementNode()
         workflow.add_node("risk_management_node", risk_management_node)
         workflow.add_node("portfolio_management_node", portfolio_management_node)
-        #
-        # # Connect selected analysts to risk management
+        
+        # Connect selected analysts to risk management
         for strategy_node_name in strategies:
             workflow.add_edge(strategy_node_name, "risk_management_node")
-        # #
-        # workflow.add_edge("start_node", "risk_management_node")
+        
         workflow.add_edge("risk_management_node", "portfolio_management_node")
-        workflow.add_edge("portfolio_management_node", END)
-        #
+        
+        # Add order execution node if enabled
+        if enable_execution:
+            order_execution_node = OrderExecutionNode(enable_execution=True)
+            workflow.add_node("order_execution_node", order_execution_node)
+            workflow.add_edge("portfolio_management_node", "order_execution_node")
+            workflow.add_edge("order_execution_node", END)
+        else:
+            workflow.add_edge("portfolio_management_node", END)
+        
         workflow.set_entry_point("start_node")
 
         return workflow

@@ -1,17 +1,26 @@
-mode: backtest # backtest, live
-start_date: 2025-04-20
+mode: live
+start_date: 2025-04-01
 end_date: 2025-05-01
-primary_interval: 1h
+primary_interval: 1m
 initial_cash: 100000
 margin_requirement: 0.0
 show_reasoning: false
 show_agent_graph: true
+
+# Order execution settings
+execution:
+  enabled: true  # Set to true to enable live trading
+  testnet: false   # Use Binance testnet for safety
+  max_order_size: 10  # Maximum order size in USD
+  min_confidence: 50    # Minimum confidence to execute orders
+
 signals:
-  intervals: ["30m", "1h", "4h"]
-  tickers: ["BTCUSDT", "ETHUSDT"]
+  intervals: ["1m"]
+  tickers: ["1000SATSUSDT", "1MBABYDOGEUSDT"]
   strategies: ['MacdStrategy']
 # , "RSIStrategy"]
 model:
-  name: "gpt-4o-mini"
-  provider: "openai"
-#  base_url: "https://api.openai.com/v1"  #
+  name: "gpt-4o-mini" # choose your model.
+  provider: "openai"  # llm provider.
+  base_url: "https://api.openai.com/v1"  # you can change it to your own.
+

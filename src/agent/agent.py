@@ -19,7 +19,8 @@ class Agent:
             show_agent_graph: bool = False,
             model_name: str = "gpt-4o",
             model_provider: str = "openai",
-            model_base_url: Optional[str] = None
+            model_base_url: Optional[str] = None,
+            enable_execution: bool = False
     ):
         """
         Executes the trading workflow using the specified configuration.
@@ -35,12 +36,17 @@ class Agent:
             model_name (str, optional): The name of the LLM model to use. Defaults to "gpt-4o".
             model_provider (str, optional): The provider of the LLM model. Defaults to "openai".
             model_base_url (str, optional): The base URL of the LLM model. Defaults to None.
+            enable_execution (bool, optional): Whether to enable order execution. Defaults to False.
 
         Returns:
         None
         """
-        # Create a new workflow if analysts are customized
-        workflow = Workflow.create_workflow(intervals=intervals, strategies=strategies)
+        # Create a new workflow with execution flag
+        workflow = Workflow.create_workflow(
+            intervals=intervals, 
+            strategies=strategies, 
+            enable_execution=enable_execution
+        )
         agent = workflow.compile()
 
         if show_agent_graph:

@@ -21,6 +21,13 @@ class ModelSettings(BaseModel):
     base_url: Optional[str] = None
 
 
+class ExecutionSettings(BaseModel):
+    enabled: bool = False
+    testnet: bool = True
+    max_order_size: float = 1000.0
+    min_confidence: float = 50.0
+
+
 class Settings(BaseSettings):
     mode: str
     start_date: datetime
@@ -32,6 +39,7 @@ class Settings(BaseSettings):
     show_agent_graph: bool = True
     signals: SignalSettings
     model: ModelSettings
+    execution: ExecutionSettings = ExecutionSettings()
 
     @model_validator(mode='after')
     def check_primary_interval_in_intervals(self):
