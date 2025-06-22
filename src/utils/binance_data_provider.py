@@ -199,11 +199,29 @@ class BinanceDataProvider:
         """
         formatted_symbol = symbol.replace("/", "")
         try:
+            # Calculate start time based on end time and limit
+            # For spot trading, we'll use the standard get_historical_klines method
+            # and calculate the start time based on the end time
+            end_ts = int(end_time.timestamp() * 1000)
+            
+            # Estimate start time based on timeframe and limit
+            # This is a rough estimation - in practice you might want to adjust this
+            timeframe_minutes = {
+                '1m': 1, '3m': 3, '5m': 5, '15m': 15, '30m': 30,
+                '1h': 60, '2h': 120, '4h': 240, '6h': 360, '8h': 480, '12h': 720,
+                '1d': 1440, '3d': 4320, '1w': 10080, '1M': 43200
+            }
+            
+            minutes_per_candle = timeframe_minutes.get(timeframe, 1)
+            total_minutes = minutes_per_candle * limit
+            start_ts = end_ts - (total_minutes * 60 * 1000)
+            
             # Use the client to get klines
-            klines = self.client.futures_historical_klines_with_end_time(
+            klines = self.client.get_historical_klines(
                 symbol=formatted_symbol,
                 interval=self._format_timeframe(timeframe),
-                end_str=end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                start_str=start_ts,
+                end_str=end_ts,
                 limit=limit
             )
 

@@ -264,6 +264,10 @@ def normalize_pandas(obj):
 
 
 def calculate_rsi(prices_df: pd.DataFrame, period: int = 14) -> pd.Series:
+    # Check if DataFrame is empty or missing required columns
+    if prices_df.empty or 'close' not in prices_df.columns:
+        return pd.Series(dtype=float)
+    
     delta = prices_df["close"].diff()
     gain = (delta.where(delta > 0, 0)).fillna(0)
     loss = (-delta.where(delta < 0, 0)).fillna(0)
@@ -275,6 +279,10 @@ def calculate_rsi(prices_df: pd.DataFrame, period: int = 14) -> pd.Series:
 
 
 def calculate_bollinger_bands(prices_df: pd.DataFrame, window: int = 20) -> tuple[pd.Series, pd.Series]:
+    # Check if DataFrame is empty or missing required columns
+    if prices_df.empty or 'close' not in prices_df.columns:
+        return pd.Series(dtype=float), pd.Series(dtype=float)
+    
     sma = prices_df["close"].rolling(window).mean()
     std_dev = prices_df["close"].rolling(window).std()
     upper_band = sma + (std_dev * 2)
@@ -293,6 +301,10 @@ def calculate_ema(df: pd.DataFrame, window: int) -> pd.Series:
     Returns:
         pd.Series: EMA values
     """
+    # Check if DataFrame is empty or missing required columns
+    if df.empty or 'close' not in df.columns:
+        return pd.Series(dtype=float)
+    
     return df["close"].ewm(span=window, adjust=False).mean()
 
 
@@ -307,6 +319,10 @@ def calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     Returns:
         DataFrame with ADX values
     """
+    # Check if DataFrame is empty or missing required columns
+    if df.empty or not all(col in df.columns for col in ['high', 'low', 'close']):
+        return pd.DataFrame(columns=['adx', '+di', '-di'])
+    
     # Calculate True Range
     df["high_low"] = df["high"] - df["low"]
     df["high_close"] = abs(df["high"] - df["close"].shift())
@@ -340,6 +356,10 @@ def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     Returns:
         pd.Series: ATR values
     """
+    # Check if DataFrame is empty or missing required columns
+    if df.empty or not all(col in df.columns for col in ['high', 'low', 'close']):
+        return pd.Series(dtype=float)
+    
     high_low = df["high"] - df["low"]
     high_close = abs(df["high"] - df["close"].shift())
     low_close = abs(df["low"] - df["close"].shift())
