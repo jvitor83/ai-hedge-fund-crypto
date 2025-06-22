@@ -26,6 +26,7 @@ class ExecutionSettings(BaseModel):
     testnet: bool = True
     max_order_size: float = 1000.0
     min_confidence: float = 50.0
+    execution_interval: Optional[str] = None  # Interval for repeated execution (e.g., "1m", "5m", "1h")
 
 
 class Settings(BaseSettings):

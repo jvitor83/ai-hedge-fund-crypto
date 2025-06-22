@@ -1,18 +1,29 @@
 mode: live
-start_date: 2025-04-01
-end_date: 2025-05-01
-primary_interval: 1h
+start_date: 2025-01-01
+end_date: 2025-02-01
+primary_interval: 1m
 initial_cash: 100000
 margin_requirement: 0.0
 show_reasoning: false
 show_agent_graph: true
+
+# Order execution settings
+execution:
+  enabled: true  # Set to true to enable live trading
+  testnet: true   # Use Binance testnet for safety (recommended for testing)
+  max_order_size: 100  # Maximum order size in USD
+  min_confidence: 70    # Minimum confidence to execute orders
+  execution_interval: "5m"  # Interval for repeated execution
+  # Available intervals: "1m", "2m", "3m", "5m", "10m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"
+  # Set to null or remove this line for single execution mode
+
 signals:
-  intervals: ["5m", "15m", "30m", "1h"]
-  tickers: ["1000SATSUSDT", "1MBABYDOGEUSDT"]
-  strategies: ['MacdStrategy', 'RSIStrategy', 'BollingerStrategy']
-# , "RSIStrategy"]
+  intervals: ["1m", "5m", "15m"]
+  tickers: ["BTCUSDT", "ETHUSDT"]
+  strategies: ['MacdStrategy', 'RSIStrategy']
+
 model:
-  name: "gpt-4o-mini" # choose your model.
-  provider: "openai"  # llm provider.
-  base_url: "https://api.openai.com/v1"  # you can change it to your own.
+  name: "gpt-4o-mini" # choose your model
+  provider: "openai"  # llm provider
+  base_url: "https://api.openai.com/v1"  # you can change it to your own
 

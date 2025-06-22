@@ -208,10 +208,22 @@ initial_cash: 100000  # Starting capital
 margin_requirement: 0.0  # Margin requirements for short positions
 show_reasoning: false  # Whether to show strategy reasoning
 show_agent_graph: true  # Whether to show the agent workflow graph
+
+# Order execution settings
+execution:
+  enabled: true  # Set to true to enable live trading
+  testnet: true   # Use Binance testnet for safety (recommended for testing)
+  max_order_size: 100  # Maximum order size in USD
+  min_confidence: 70    # Minimum confidence to execute orders
+  execution_interval: "5m"  # Interval for repeated execution (e.g., "1m", "5m", "1h", "1d")
+  # Available intervals: "1m", "2m", "3m", "5m", "10m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"
+  # Set to null or remove this line for single execution mode
+
 signals:
   intervals: ["30m", "1h", "4h"]  # Timeframes to analyze
   tickers: ["BTCUSDT", "ETHUSDT"]  # Trading pairs
   strategies: ['MacdStrategy']  # Strategies to use
+
 model:
   name: "gpt-4o-mini" # config your model
   provider: "openai"  # config your llm provider, support openai， groq， openrouter，gemini，anthropic，ollama
@@ -293,6 +305,82 @@ BINANCE_API_SECRET=your-binance-api-secret
 ```bash
 uv run main.py
 ```
+
+#### Interval-Based Execution
+
+The system now supports continuous trading with configurable intervals. This allows the bot to run continuously and make trading decisions at regular intervals.
+
+**Single Execution Mode (Default)**
+If you don't set an `execution_interval` or set it to `null`, the bot will run once and exit:
+
+```yaml
+execution:
+  enabled: true
+  testnet: true
+  execution_interval: null  # Single execution mode
+```
+
+**Continuous Trading Mode**
+To enable continuous trading with regular intervals:
+
+```yaml
+execution:
+  enabled: true
+  testnet: true
+  execution_interval: "5m"  # Run every 5 minutes
+```
+
+Available intervals:
+- **Short-term**: `"1m"`, `"2m"`, `"3m"`, `"5m"`, `"10m"`, `"15m"`, `"30m"`
+- **Medium-term**: `"1h"`, `"2h"`, `"4h"`, `"6h"`, `"8h"`, `"12h"`
+- **Long-term**: `"1d"`, `"3d"`, `"1w"`
+
+**Example Usage:**
+
+1. Configure for 5-minute intervals:
+```yaml
+execution:
+  enabled: true
+  testnet: true
+  max_order_size: 100
+  min_confidence: 70
+  execution_interval: "5m"
+```
+
+2. Run the bot:
+```bash
+uv run main.py
+```
+
+3. The bot will:
+   - Run trading analysis every 5 minutes
+   - Display current time and decisions
+   - Wait for the next interval
+   - Continue until stopped with Ctrl+C
+
+**Sample Output:**
+```
+🔄 Starting interval-based trading with 5m intervals
+Press Ctrl+C to stop the bot
+
+🔄 Running trading cycle at 2025-01-15 10:30:00
+Trading Decisions:
+{'BTCUSDT': {'action': 'buy', 'quantity': 0.5, 'confidence': 75}}
+⏰ Waiting 300 seconds until next cycle...
+
+🔄 Running trading cycle at 2025-01-15 10:35:00
+Trading Decisions:
+{'BTCUSDT': {'action': 'hold', 'quantity': 0, 'confidence': 45}}
+⏰ Waiting 300 seconds until next cycle...
+```
+
+**Important Notes:**
+- The bot will run continuously until manually stopped
+- Use Ctrl+C to gracefully stop the bot
+- Monitor the bot's performance and adjust intervals as needed
+- Consider using longer intervals (1h, 4h, 1d) for less frequent but more strategic trading
+- Shorter intervals (1m, 5m) are suitable for more active trading but may generate more noise
+
 ## Real Trading Integration (Planned)
 The system is designed to support real trading through a Binance gateway client, which can send live orders based on strategy-generated signals. The gateway module extends the functionality of the python-binance library with features optimized for algorithmic trading.
 

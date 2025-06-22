@@ -4,14 +4,60 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 from dotenv import load_dotenv
 from src.utils import settings
 from datetime import datetime
+import time
+import signal
+import sys
 from src.agent import Agent
 from src.backtest.backtester import Backtester
 from src.gateway.order_executor import OrderExecutor
+from src.utils.constants import Interval
 
 
 load_dotenv()
 
+def signal_handler(sig, frame):
+    print('\n🛑 Stopping trading bot...')
+    sys.exit(0)
+
+def run_trading_cycle(portfolio, executor=None):
+    """Run a single trading cycle"""
+    print(f"\n🔄 Running trading cycle at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    result = Agent.run(
+        primary_interval=settings.primary_interval,
+        intervals=settings.signals.intervals,
+        tickers=settings.signals.tickers,
+        end_date=datetime.now(),
+        portfolio=portfolio,
+        strategies=settings.signals.strategies,
+        show_reasoning=settings.show_reasoning,
+        show_agent_graph=settings.show_agent_graph,
+        model_name=settings.model.name,
+        model_provider=settings.model.provider,
+        model_base_url=settings.model.base_url,
+        enable_execution=settings.execution.enabled
+    )
+    
+    print("Trading Decisions:")
+    print(result.get('decisions'))
+    
+    if settings.execution.enabled and 'execution_results' in result:
+        print("\nOrder Execution Results:")
+        print(result.get('execution_results'))
+    
+    return result
+
+def get_interval_seconds(interval_str):
+    """Convert interval string to seconds"""
+    if not interval_str:
+        return None
+    
+    interval = Interval.from_string(interval_str)
+    return interval.to_timedelta().total_seconds()
+
 if __name__ == "__main__":
+    # Set up signal handler for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
 
     if settings.mode == "backtest":
         backtester = Backtester(
@@ -57,6 +103,7 @@ if __name__ == "__main__":
         }
 
         # Check if order execution is enabled
+        executor = None
         if settings.execution.enabled:
             print("⚠️  WARNING: Live trading is enabled!")
             print(f"   Testnet: {settings.execution.testnet}")
@@ -73,24 +120,24 @@ if __name__ == "__main__":
                 print(f"❌ Failed to connect to Binance: {e}")
                 exit(1)
         
-        result = Agent.run(
-            primary_interval=settings.primary_interval,
-            intervals=settings.signals.intervals,
-            tickers=settings.signals.tickers,
-            end_date=datetime.now(),
-            portfolio=portfolio,
-            strategies=settings.signals.strategies,
-            show_reasoning=settings.show_reasoning,
-            show_agent_graph=settings.show_agent_graph,
-            model_name=settings.model.name,
-            model_provider=settings.model.provider,
-            model_base_url=settings.model.base_url,
-            enable_execution=settings.execution.enabled  # Pass execution flag
-        )
+        # Check if interval-based execution is enabled
+        execution_interval_seconds = get_interval_seconds(settings.execution.execution_interval)
         
-        print("Trading Decisions:")
-        print(result.get('decisions'))
-        
-        if settings.execution.enabled and 'execution_results' in result:
-            print("\nOrder Execution Results:")
-            print(result.get('execution_results'))
+        if execution_interval_seconds:
+            print(f"🔄 Starting interval-based trading with {settings.execution.execution_interval} intervals")
+            print("Press Ctrl+C to stop the bot")
+            
+            try:
+                while True:
+                    run_trading_cycle(portfolio, executor)
+                    
+                    # Wait for the next interval
+                    print(f"⏰ Waiting {execution_interval_seconds} seconds until next cycle...")
+                    time.sleep(execution_interval_seconds)
+                    
+            except KeyboardInterrupt:
+                print('\n🛑 Trading bot stopped by user')
+        else:
+            # Single execution mode (original behavior)
+            print("🚀 Running single trading cycle...")
+            run_trading_cycle(portfolio, executor)
