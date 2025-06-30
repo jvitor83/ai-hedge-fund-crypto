@@ -115,7 +115,26 @@ if __name__ == "__main__":
                 executor = OrderExecutor(testnet=settings.execution.testnet)
                 account_info = executor.get_account_info()
                 print(f"✅ Connected to Binance account")
-                print(f"   Balance: {account_info.get('totalWalletBalance', 'N/A')}")
+                
+                # Display balances for spot accounts
+                if account_info and 'balances' in account_info:
+                    balances = [b for b in account_info['balances'] if float(b['free']) > 0 or float(b['locked']) > 0]
+                    if balances:
+                        print("   Balances:")
+                        for balance in balances:
+                            print(f"     - {balance['asset']}: Free={balance['free']}, Locked={balance['locked']}")
+                    else:
+                        print("   No asset balances found.")
+                else:
+                    print("   Could not retrieve account balance.")
+
+                # Verify API key loading
+                api_key_to_check = os.getenv("BINANCE_API_KEY")
+                if api_key_to_check:
+                    print(f"   Using API Key: {api_key_to_check[:5]}...{api_key_to_check[-4:]}")
+                else:
+                    print("   API Key not found in environment variables!")
+                    
             except Exception as e:
                 print(f"❌ Failed to connect to Binance: {e}")
                 exit(1)

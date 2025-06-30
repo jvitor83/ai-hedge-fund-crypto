@@ -57,25 +57,87 @@ class OrderExecutor:
         try:
             symbol_info = self._get_symbol_info(symbol)
             
-            # Find the LOT_SIZE filter for quantity precision
+            # Find the LOT_SIZE and NOTIONAL filters
             lot_size_filter = None
+            notional_filter = None
+            
             for filter_info in symbol_info.get('filters', []):
                 if filter_info['filterType'] == 'LOT_SIZE':
                     lot_size_filter = filter_info
-                    break
+                elif filter_info['filterType'] == 'NOTIONAL':
+                    notional_filter = filter_info
+                elif filter_info['filterType'] == 'MIN_NOTIONAL':
+                    notional_filter = filter_info
             
             if lot_size_filter:
                 step_size = float(lot_size_filter['stepSize'])
+                min_qty = float(lot_size_filter['minQty'])
+                
+                # Check for minimum notional value
+                min_notional = 0.0
+                if notional_filter:
+                    min_notional = float(notional_filter.get('minNotional', 0.0))
+                
+                # Get current price to calculate minimum quantity for notional
+                current_price = 0.0
+                try:
+                    ticker_price = self.client._client.get_symbol_ticker(symbol=symbol)
+                    current_price = float(ticker_price['price'])
+                except Exception as e:
+                    logger.warning(f"Could not get current price for {symbol}: {e}")
+                
+                # Debug logging
+                logger.info(f"Symbol {symbol}: step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}, current_price={current_price}, input_quantity={quantity}")
+                
+                # Calculate minimum quantity needed to meet notional requirement
+                min_qty_for_notional = 0.0
+                if min_notional > 0 and current_price > 0:
+                    min_qty_for_notional = min_notional / current_price
+                
+                # Use the higher of the two minimum requirements
+                effective_min_qty = max(min_qty, min_qty_for_notional)
+                
+                # Ensure quantity meets minimum requirement
+                if quantity < effective_min_qty:
+                    logger.warning(f"Quantity {quantity} is below effective minimum {effective_min_qty} for {symbol} (lot: {min_qty}, notional: {min_qty_for_notional}), adjusting to minimum")
+                    quantity = effective_min_qty
+                
+                # Round to step size
+                if step_size > 0:
+                    quantity = round(quantity / step_size) * step_size
+                
+                # After rounding, ensure we still meet minimum notional
+                if min_notional > 0 and current_price > 0:
+                    while quantity * current_price < min_notional * 1.001:  # 0.1% safety margin
+                        quantity += step_size if step_size > 0 else 0.1
+                
                 # Calculate precision based on step size
                 precision = 0
                 if step_size < 1:
                     precision = len(str(step_size).split('.')[-1].rstrip('0'))
                 
-                # Round quantity to the required precision
-                formatted_quantity = round(quantity, precision)
-                return f"{formatted_quantity:.{precision}f}"
+                # Format with appropriate precision
+                formatted_quantity = f"{quantity:.{precision}f}"
+                
+                # Remove trailing zeros and decimal point if it's a whole number
+                if precision == 0:
+                    formatted_quantity = str(int(quantity))
+                else:
+                    formatted_quantity = f"{quantity:.{precision}f}".rstrip('0').rstrip('.')
+                
+                logger.info(f"Formatted quantity for {symbol}: {formatted_quantity}")
+                
+                # Final validation - check if the order value meets minimum notional
+                if min_notional > 0 and current_price > 0:
+                    order_value = float(formatted_quantity) * current_price
+                    if order_value < min_notional:
+                        logger.error(f"Order value {order_value} is still below minimum notional {min_notional} for {symbol}")
+                        raise ValueError(f"Order value {order_value} USDT is below minimum notional {min_notional} USDT for {symbol}")
+                
+                return formatted_quantity
             else:
                 # Default to 8 decimal places if no filter found
+                logger.warning(f"No LOT_SIZE filter found for {symbol}, using default formatting")
                 return f"{quantity:.8f}"
                 
         except Exception as e:
@@ -97,6 +159,9 @@ class OrderExecutor:
         action = decision.get("action", "hold")
         quantity = decision.get("quantity", 0.0)
         confidence = decision.get("confidence", 0.0)
+        
+        # Debug logging for all decisions
+        logger.info(f"OrderExecutor received decision for {ticker}: action={action}, quantity={quantity}, confidence={confidence}")
         
         if action == "hold" or quantity <= 0:
             return {
@@ -138,8 +203,15 @@ class OrderExecutor:
             # Format quantity according to symbol precision
             formatted_quantity = self._format_quantity(ticker, quantity)
             
-            # Use market order for immediate execution
-            order = self.client.order_market_buy(
+            # Add debug logging
+            logger.info(f"Executing buy order for {ticker}: original_quantity={quantity}, formatted_quantity={formatted_quantity}")
+            
+            # Validate quantity is not zero or negative
+            if float(formatted_quantity) <= 0:
+                raise ValueError(f"Invalid quantity: {formatted_quantity}")
+            
+            # Use market order for immediate execution - use native client directly
+            order = self.client._client.order_market_buy(
                 symbol=ticker,
                 quantity=formatted_quantity
             )
@@ -170,7 +242,7 @@ class OrderExecutor:
             # Format quantity according to symbol precision
             formatted_quantity = self._format_quantity(ticker, quantity)
             
-            order = self.client.order_market_sell(
+            order = self.client._client.order_market_sell(
                 symbol=ticker,
                 quantity=formatted_quantity
             )
