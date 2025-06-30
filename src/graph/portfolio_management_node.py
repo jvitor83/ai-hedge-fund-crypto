@@ -87,98 +87,126 @@ def generate_trading_decision(
         model_base_url: Optional[str] = None
 ):
     """Attempts to get a decision from the LLM with retry logic"""
-    # Create the prompt template
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                """You are a portfolio manager making final trading decisions based on multiple tickers.
-  
-                Trading Rules:
-                - For long positions:
-                  * Only buy if you have available cash
-                  * Only sell if you currently hold long shares of that ticker
-                  * Sell quantity must be ≤ current long position shares
-                  * Buy quantity must be ≤ max_shares for that ticker
-  
-                - For short positions:
-                  * Only short if you have available margin (position value × margin requirement)
-                  * Only cover if you currently have short shares of that ticker
-                  * Cover quantity must be ≤ current short position shares
-                  * Short quantity must respect margin requirements
-  
-                - The max_shares values are pre-calculated to respect position limits
-                - Consider both long and short opportunities based on signals
-                - Maintain appropriate risk management with both long and short exposure
-  
-                Available Actions:
-                - "buy": Open or add to long position
-                - "sell": Close or reduce long position
-                - "short": Open or add to short position
-                - "cover": Close or reduce short position
-                - "hold": No action
-  
-                Inputs:
-                - signals_by_ticker: dictionary of ticker → signals
-                - max_shares: maximum shares allowed per ticker
-                - portfolio_cash: current cash in portfolio
-                - portfolio_positions: current positions (both long and short)
-                - current_prices: current prices for each ticker
-                - margin_requirement: current margin requirement for short positions (e.g., 0.5 means 50%)
-                - total_margin_used: total margin currently in use
-                """,
-            ),
-            (
-                "human",
-                """Based on the team's analysis, make your trading decisions for each ticker.
-  
-                Here are the signals by ticker:
-                {signals_by_ticker}
-  
-                Current Prices:
-                {current_prices}
-  
-                Maximum Shares Allowed For Purchases:
-                {max_shares}
-  
-                Portfolio Cash: {portfolio_cash}
-                Current Positions: {portfolio_positions}
-                Current Margin Requirement: {margin_requirement}
-                Total Margin Used: {total_margin_used}
-  
-                Output strictly in JSON with the following structure:
-                {{
-                  "decisions": {{
-                    "TICKER1": {{
-                      "action": "buy/sell/short/cover/hold",
-                      "quantity": float,
-                      "confidence": float between 0 and 100,
-                      "reasoning": "string"
-                    }},
-                    "TICKER2": {{
-                      ...
-                    }},
-                    ...
-                  }}
-                }}
-                """,
-            ),
-        ]
-    )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Create the prompt template
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    (
+                        "system",
+                        """You are a portfolio manager making final trading decisions based on multiple tickers.
+      
+                        Trading Rules:
+                        - For long positions:
+                          * Only buy if you have available cash
+                          * Only sell if you currently hold long shares of that ticker
+                          * Sell quantity must be ≤ current long position shares
+                          * Buy quantity must be ≤ max_shares for that ticker
+      
+                        - For short positions:
+                          * Only short if you have available margin (position value × margin requirement)
+                          * Only cover if you currently have short shares of that ticker
+                          * Cover quantity must be ≤ current short position shares
+                          * Short quantity must respect margin requirements
+      
+                        - The max_shares values are pre-calculated to respect position limits
+                        - Consider both long and short opportunities based on signals
+                        - Maintain appropriate risk management with both long and short exposure
+      
+                        Available Actions:
+                        - "buy": Open or add to long position
+                        - "sell": Close or reduce long position
+                        - "short": Open or add to short position
+                        - "cover": Close or reduce short position
+                        - "hold": No action
+      
+                        Inputs:
+                        - signals_by_ticker: dictionary of ticker → signals
+                        - max_shares: maximum shares allowed per ticker
+                        - portfolio_cash: current cash in portfolio
+                        - portfolio_positions: current positions (both long and short)
+                        - current_prices: current prices for each ticker
+                        - margin_requirement: current margin requirement for short positions (e.g., 0.5 means 50%)
+                        - total_margin_used: total margin currently in use
+                        """,
+                    ),
+                    (
+                        "human",
+                        """Based on the team's analysis, make your trading decisions for each ticker.
+      
+                        Here are the signals by ticker:
+                        {signals_by_ticker}
+      
+                        Current Prices:
+                        {current_prices}
+      
+                        Maximum Shares Allowed For Purchases:
+                        {max_shares}
+      
+                        Portfolio Cash: {portfolio_cash}
+                        Current Positions: {portfolio_positions}
+                        Current Margin Requirement: {margin_requirement}
+                        Total Margin Used: {total_margin_used}
+      
+                        Output strictly in JSON with the following structure:
+                        {{
+                          "decisions": {{
+                            "TICKER1": {{
+                              "action": "buy/sell/short/cover/hold",
+                              "quantity": numeric_value_only,
+                              "confidence": numeric_value_between_0_and_100,
+                              "reasoning": "string"
+                            }},
+                            "TICKER2": {{
+                              ...
+                            }},
+                            ...
+                          }}
+                        }}
+                        
+                        CRITICAL REQUIREMENTS:
+                        - The quantity field must contain ONLY the final calculated numeric value
+                        - DO NOT include any calculations like "100000.0 / 0.0012174" in the JSON
+                        - Calculate all values before putting them in the JSON
+                        - Use only valid JSON format with no mathematical operations in the values
+                        - All numeric values must be actual numbers, not expressions
+                        - Do not wrap the JSON in markdown code blocks
+                        """,
+                    ),
+                ]
+            )
 
-    llm = get_llm(provider=model_provider, model=model_name, base_url=model_base_url)
+            llm = get_llm(provider=model_provider, model=model_name, base_url=model_base_url)
 
-    chain = prompt | llm | json_parser
-    result = chain.invoke(
-        {
-            "signals_by_ticker": json.dumps(signals_by_ticker, indent=2),
-            "current_prices": json.dumps(current_prices, indent=2),
-            "max_shares": json.dumps(max_shares, indent=2),
-            "portfolio_cash": f"{portfolio.get('cash', 0.0):.2f}",
-            "portfolio_positions": json.dumps(portfolio.get('positions', {}), indent=2),
-            "margin_requirement": f"{portfolio.get('margin_requirement', 0.0):.2f}",
-            "total_margin_used": f"{portfolio.get('margin_used', 0.0):.2f}",
-        }
-    )
-    # print("the return result :", result)
-    return result
+            chain = prompt | llm | json_parser
+            result = chain.invoke(
+                {
+                    "signals_by_ticker": json.dumps(signals_by_ticker, indent=2),
+                    "current_prices": json.dumps(current_prices, indent=2),
+                    "max_shares": json.dumps(max_shares, indent=2),
+                    "portfolio_cash": f"{portfolio.get('cash', 0.0):.2f}",
+                    "portfolio_positions": json.dumps(portfolio.get('positions', {}), indent=2),
+                    "margin_requirement": f"{portfolio.get('margin_requirement', 0.0):.2f}",
+                    "total_margin_used": f"{portfolio.get('margin_used', 0.0):.2f}",
+                }
+            )
+            # print("the return result :", result)
+            return result
+        
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed: {str(e)}")
+            if attempt == max_retries - 1:
+                # Return a safe default on final failure
+                print("All attempts failed, returning hold decisions for all tickers")
+                return {
+                    "decisions": {
+                        ticker: {
+                            "action": "hold",
+                            "quantity": 0.0,
+                            "confidence": 0,
+                            "reasoning": f"Failed to generate decision due to parsing error: {str(e)}"
+                        }
+                        for ticker in tickers
+                    }
+                }

@@ -9,7 +9,7 @@ show_agent_graph: true
 
 # Order execution settings
 execution:
-  enabled: true  # Set to true to enable live trading
+  enabled: true  # Set to true to enable live trading, false for demo mode
   testnet: false   # Use Binance testnet for safety
   max_order_size: 6  # Maximum order size in USD
   min_confidence: 50    # Minimum confidence to execute orders

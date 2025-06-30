@@ -110,33 +110,61 @@ if __name__ == "__main__":
             print(f"   Max order size: ${settings.execution.max_order_size}")
             print(f"   Min confidence: {settings.execution.min_confidence}%")
             
+            # Verify environment variables
+            api_key = os.getenv("BINANCE_API_KEY")
+            api_secret = os.getenv("BINANCE_API_SECRET")
+            
+            if not api_key or not api_secret:
+                print("❌ Missing Binance API credentials!")
+                print("   Please create a .env file with:")
+                print("   BINANCE_API_KEY=your-api-key")
+                print("   BINANCE_API_SECRET=your-api-secret")
+                print("   You can copy .env.example to .env and fill in your values")
+                exit(1)
+            
             # Verify API credentials
             try:
                 executor = OrderExecutor(testnet=settings.execution.testnet)
                 account_info = executor.get_account_info()
-                print(f"✅ Connected to Binance account")
                 
-                # Display balances for spot accounts
-                if account_info and 'balances' in account_info:
-                    balances = [b for b in account_info['balances'] if float(b['free']) > 0 or float(b['locked']) > 0]
-                    if balances:
-                        print("   Balances:")
-                        for balance in balances:
-                            print(f"     - {balance['asset']}: Free={balance['free']}, Locked={balance['locked']}")
+                if account_info:
+                    print(f"✅ Connected to Binance {'testnet' if settings.execution.testnet else 'mainnet'}")
+                    
+                    # Display balances for spot accounts
+                    if 'balances' in account_info:
+                        balances = [b for b in account_info['balances'] if float(b['free']) > 0 or float(b['locked']) > 0]
+                        if balances:
+                            print("   Balances:")
+                            for balance in balances[:10]:  # Show first 10 balances
+                                print(f"     - {balance['asset']}: Free={balance['free']}, Locked={balance['locked']}")
+                            if len(balances) > 10:
+                                print(f"     ... and {len(balances) - 10} more assets")
+                        else:
+                            print("   No asset balances found.")
                     else:
-                        print("   No asset balances found.")
+                        print("   Could not retrieve account balance.")
+                    
+                    print(f"   Using API Key: {api_key[:5]}...{api_key[-4:]}")
                 else:
-                    print("   Could not retrieve account balance.")
-
-                # Verify API key loading
-                api_key_to_check = os.getenv("BINANCE_API_KEY")
-                if api_key_to_check:
-                    print(f"   Using API Key: {api_key_to_check[:5]}...{api_key_to_check[-4:]}")
-                else:
-                    print("   API Key not found in environment variables!")
+                    print("❌ Failed to retrieve account info")
+                    exit(1)
                     
             except Exception as e:
-                print(f"❌ Failed to connect to Binance: {e}")
+                error_msg = str(e)
+                print(f"❌ Failed to connect to Binance: {error_msg}")
+                
+                if "Invalid API-key" in error_msg or "permissions" in error_msg:
+                    print("\n💡 Troubleshooting tips:")
+                    print("   1. Verify your API key and secret are correct")
+                    print("   2. Enable 'Spot & Margin Trading' permissions in your Binance API settings")
+                    print("   3. Add your IP address to the API key whitelist")
+                    if not settings.execution.testnet:
+                        print("   4. Consider using testnet first (set testnet: true in config.yaml)")
+                        print("   5. For testnet, get API keys from: https://testnet.binance.vision/")
+                elif "Timestamp" in error_msg:
+                    print("\n💡 Time synchronization issue:")
+                    print("   Make sure your system clock is synchronized")
+                
                 exit(1)
         
         # Check if interval-based execution is enabled
